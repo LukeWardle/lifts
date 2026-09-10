@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6fb5">
+<meta name="color-scheme" content="light dark">
+<title>Lifts</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- Not render-blocking: in a basement gym with one bar of signal, the page must
+     not sit waiting on a font. The system fallback is fine until it arrives. -->
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main id="app" class="app"></main>
+
+<div class="timer" id="timer" hidden role="timer">
+  <div class="timer-in">
+    <div class="timer-left">
+      <div class="timer-label" id="timer-label">Rest</div>
+      <div class="timer-clock" id="timer-clock">0:00</div>
+    </div>
+    <button type="button" id="timer-add">+30 s</button>
+    <button type="button" id="timer-stop">Done</button>
+  </div>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="Sections">
+  <button type="button" data-tab="train">Train</button>
+  <button type="button" data-tab="cardio">Cardio</button>
+  <button type="button" data-tab="body">Body</button>
+  <button type="button" data-tab="send">Send <span class="badge" id="badge" hidden></span></button>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
