@@ -9,7 +9,7 @@
  * an update is not. Bump CACHE when the files change.
  */
 
-const CACHE = "lifts-v1";
+const CACHE = "lifts-v2";
 const SHELL = [
   "./",
   "./index.html",

@@ -348,26 +348,112 @@ function readiness(s) {
     h("p", { class: "ready-why", text: "Two low scores in a row is one of the things that asks Claude to look at your plan." }));
 }
 
-function swapSelect(s, e, current) {
-  const sel = h("select", {
-    class: "swap", "aria-label": `Swap ${e.name} for another exercise`,
-    onchange: (ev) => {
-      const log = logFor(s.id, true);
-      const v = Number(ev.target.value);
-      if (v) log.swaps[e.id] = v; else delete log.swaps[e.id];
-      touch(log);
-      const y = window.scrollY;
-      render();
-      window.scrollTo(0, y);
-    },
+/** The swap in force for an exercise. Older saves kept only an id. */
+function currentSwap(log, e) {
+  const raw = log?.swaps?.[e.id];
+  if (!raw) return null;
+  if (typeof raw === "number") return (e.swaps || []).find((x) => x.id === raw) || null;
+  return raw;
+}
+
+/* The picker for "that machine is taken".
+ *
+ * A handful of suggestions is not enough on its own: the one machine free at
+ * midnight may be nothing like the one in the plan. The whole library rides in
+ * the pack, and anything the gym has that the library does not can be typed —
+ * it joins your list on the laptop when the results are sent. */
+function openSwap(s, e) {
+  const lib = state.pack?.library || { exercises: [], muscles: [], body_parts: [], equipment: [] };
+  const muscleName = (key) => lib.muscles.find((m) => m.key === key)?.name || key;
+
+  const back = h("div", { class: "sheet-back" });
+  const onKey = (ev) => { if (ev.key === "Escape") close(); };
+  function close() { back.remove(); document.removeEventListener("keydown", onKey); }
+  back.addEventListener("click", (ev) => { if (ev.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+
+  const pick = (choice) => {
+    const log = logFor(s.id, true);
+    if (choice) log.swaps[e.id] = choice; else delete log.swaps[e.id];
+    touch(log);
+    close();
+    const y = window.scrollY;
+    render();
+    window.scrollTo(0, y);
+    toast(choice ? `Swapped to ${choice.name}.` : `Back to ${e.name}.`);
+  };
+
+  const list = h("div", { class: "sheet-list" });
+  const item = (x, why) => h("button", {
+    type: "button", class: "pick", onclick: () => pick({ id: x.id, name: x.name }),
+  }, h("b", { text: x.name }), h("span", { text: why || muscleName(x.m) }));
+
+  const draw = (query) => {
+    list.replaceChildren();
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      if (currentSwap(state.sessions[s.id] || null, e)) {
+        list.append(h("button", { type: "button", class: "pick", onclick: () => pick(null) },
+          h("b", { text: `Back to ${e.name}` }), h("span", { text: "what the plan asked for" })));
+      }
+      if (e.swaps?.length) {
+        list.append(h("p", { class: "label", text: "Closest to it" }));
+        e.swaps.forEach((x) => list.append(item(x, "suggested")));
+        list.append(h("p", { class: "label", text: "Everything on your list" }));
+      }
+    }
+    const hits = lib.exercises.filter((x) => x.id !== e.id && (!q || x.name.toLowerCase().includes(q)));
+    if (!hits.length) list.append(h("p", { class: "hint", text: "Nothing with that name. Add it below." }));
+    hits.slice(0, 80).forEach((x) => list.append(item(x)));
+    if (hits.length > 80) {
+      list.append(h("p", { class: "hint", text: `${hits.length - 80} more. Keep typing to narrow it down.` }));
+    }
+  };
+
+  const search = h("input", {
+    type: "search", class: "input", placeholder: "Search your exercises",
+    "aria-label": "Search exercises",
   });
-  sel.append(h("option", { value: "0", text: current ? `Back to ${e.name}` : "Machine taken? Swap…" }));
-  for (const x of e.swaps) {
-    const o = h("option", { value: String(x.id), text: x.name });
-    if (x.id === current) o.selected = true;
-    sel.append(o);
+  search.addEventListener("input", () => draw(search.value));
+
+  const nameIn = h("input", { type: "text", class: "input", placeholder: "e.g. Hammer Strength Row",
+    "aria-label": "Name of the exercise" });
+  const muscleIn = h("select", { "aria-label": "Main muscle" });
+  for (const bp of lib.body_parts) {
+    const group = h("optgroup", { label: bp.name });
+    bp.muscles.forEach((m) => group.append(h("option", { value: m, text: muscleName(m) })));
+    muscleIn.append(group);
   }
-  return sel;
+  const kitIn = h("select", { "aria-label": "Kit" });
+  lib.equipment.forEach((q) => kitIn.append(h("option", { value: q.key, text: q.name })));
+  kitIn.value = "machine";
+  const compoundIn = h("input", { type: "checkbox" });
+  compoundIn.checked = true;
+
+  const own = h("details", {}, h("summary", { text: "Not on the list? Add your own" }),
+    h("div", { class: "own" },
+      nameIn,
+      h("div", { class: "grid2" },
+        h("label", { class: "lbl" }, "Main muscle", muscleIn),
+        h("label", { class: "lbl" }, "Kit", kitIn)),
+      h("label", { class: "check" }, compoundIn,
+        h("span", { text: "Works several muscles at once — a press, a row, a squat" })),
+      h("p", { class: "hint", text: "It joins your exercise list on the laptop when you send your results." }),
+      h("button", { type: "button", class: "btn", text: "Use this exercise", onclick: () => {
+        const name = nameIn.value.trim();
+        if (name.length < 2) { toast("Type the exercise's name first."); nameIn.focus(); return; }
+        pick({ id: null, name, m: muscleIn.value, eq: kitIn.value, c: compoundIn.checked });
+      } })));
+
+  back.append(h("div", { class: "sheet", role: "dialog", "aria-modal": "true",
+    "aria-label": `Instead of ${e.name}` },
+    h("div", { class: "sheet-top" },
+      h("h2", { class: "card-title", text: `Instead of ${e.name}` }),
+      h("button", { type: "button", class: "chip", text: "Close", onclick: close })),
+    search, list, own));
+  document.body.append(back);
+  draw("");
+  search.focus();
 }
 
 function numberField(value, placeholder, step, label, unit) {
@@ -385,9 +471,12 @@ function setRows(s, e, exId, name, swapped, lastExercise) {
       h("span", { text: "Set" }), h("span", { text: "Weight" }), h("span", { text: "Reps" }),
       h("span", { text: "Left" }), h("span")));
   const kgInputs = [];
+  // An exercise typed in at the gym has no id yet, so its sets are kept under
+  // its name until the laptop gives it one.
+  const base = exId == null ? `c-${name.toLowerCase()}` : String(exId);
 
   e.sets.forEach((target, i) => {
-    const key = `${exId}:${i}`;
+    const key = `${base}:${i}`;
     const done = state.sessions[s.id]?.sets?.[key] || null;
     const [kgIn, kgBox] = numberField(done?.kg ?? "",
       swapped || target.kg == null ? "—" : String(target.kg), "0.5", `${name}, set ${i + 1}, weight`, "kg");
@@ -459,8 +548,7 @@ function setRows(s, e, exId, name, swapped, lastExercise) {
 
 function exerciseCard(s, e, i, total) {
   const log = state.sessions[s.id] || null;
-  const swapId = log?.swaps?.[e.id];
-  const swap = swapId ? (e.swaps || []).find((x) => x.id === swapId) : null;
+  const swap = currentSwap(log, e);
   const exId = swap ? swap.id : e.id;
   const name = swap ? swap.name : e.name;
   const rir = e.sets[0]?.rir ?? 2;
@@ -484,7 +572,10 @@ function exerciseCard(s, e, i, total) {
     }, "Rest ", h("b", { text: restText(e.rest) })));
   const kg = swap ? null : e.sets[0]?.kg;
   if (kg) meta.append(h("span", { class: "chip" }, "Working ", h("b", { text: `${kg} kg` })));
-  if (e.swaps?.length) meta.append(swapSelect(s, e, swapId));
+  meta.append(h("button", {
+    type: "button", class: "chip", text: swap ? "Change swap…" : "Machine taken? Swap…",
+    onclick: () => openSwap(s, e),
+  }));
   card.append(meta);
 
   if (swap) {
@@ -791,6 +882,12 @@ function collect() {
       })),
     cardio: state.cardio.map(({ at, ...b }) => b),
     weigh_ins: state.weighIns.map(({ at, ...w }) => w),
+    // Exercises typed in at the gym, for the laptop to put on the list.
+    customs: Object.values(state.sessions)
+      .flatMap((l) => Object.values(l.swaps || {}))
+      .filter((x) => x && typeof x === "object" && x.id === null)
+      .filter((x, i, all) => all.findIndex((y) => y.name === x.name) === i)
+      .map(({ name, m, eq, c }) => ({ name, m, eq, c })),
   };
 }
 

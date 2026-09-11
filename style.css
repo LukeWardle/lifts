@@ -629,6 +629,53 @@ pre.report {
 }
 body.timing .toast { bottom: calc(var(--nav-h) + 5.5rem + env(safe-area-inset-bottom)); }
 
+/* ---------------- the swap picker ---------------- */
+
+.sheet-back {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(9, 12, 17, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  width: min(32rem, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--ground);
+  border-radius: 14px 14px 0 0;
+  padding: 0.9rem 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sheet-top { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.sheet input[type="search"] { min-height: var(--tap); }
+.sheet-list { display: flex; flex-direction: column; gap: 4px; }
+.sheet-list .label { margin: 0.5rem 0 0.1rem; }
+.pick {
+  min-height: var(--tap);
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.pick b { font-weight: 600; }
+.pick span { font-size: 0.74rem; color: var(--ink-faint); white-space: nowrap; }
+.own { display: flex; flex-direction: column; gap: 0.55rem; padding-top: 0.5rem; }
+.check { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; color: var(--ink-soft); }
+.check input { width: 26px; height: 26px; accent-color: var(--plate-blue); }
+
 .welcome { display: flex; flex-direction: column; gap: 0.8rem; padding-top: 1.5rem; }
 .loader { display: flex; flex-direction: column; gap: 0.5rem; }
 
