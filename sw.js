@@ -9,10 +9,11 @@
  * an update is not. Bump CACHE when the files change.
  */
 
-const CACHE = "lifts-v2";
+const CACHE = "lifts-v4";
 const SHELL = [
   "./",
   "./index.html",
+  "./contract.js",
   "./app.js",
   "./style.css",
   "./manifest.webmanifest",

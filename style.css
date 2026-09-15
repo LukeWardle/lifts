@@ -165,6 +165,7 @@ h1 {
 }
 .wd.lift .wd-box { background: var(--plate-blue-t); color: var(--plate-blue); }
 .wd.done .wd-box { background: var(--plate-green); color: var(--on-accent); }
+.wd.cardio-done:not(.done) .wd-box { background: var(--plate-blue-t); color: var(--plate-blue); }
 .wd.missed .wd-box {
   background: var(--plate-red-t);
   color: var(--plate-red);
@@ -182,6 +183,7 @@ h1 {
   min-height: 1.1em;
   white-space: nowrap;
 }
+.wd.cardio-done .wd-cardio { color: var(--plate-blue); }
 .week-key { margin: 0.5rem 0 0; font-size: 0.8rem; color: var(--ink-soft); }
 
 /* ---------------- workout picker ---------------- */

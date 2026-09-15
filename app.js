@@ -111,16 +111,7 @@ function toast(message) {
    checksum catches anything actually damaged. The laptop side is phone.py. */
 
 async function decodeCode(text) {
-  const clean = String(text).replace(/[^A-Za-z0-9_-]/g, "");
-  if (clean.length < 20) throw new Error("That code is too short. Copy all of it.");
-  const b64 = clean.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (clean.length % 4)) % 4);
-  let bytes;
-  try { bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); }
-  catch { throw new Error("That code is damaged. Copy it again, all of it."); }
-  try {
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-    return JSON.parse(await new Response(stream).text());
-  } catch { throw new Error("That code is damaged or cut short. Copy it again, all of it."); }
+  return LiftsContract.decodePlanCode(text);
 }
 
 async function encodeObj(obj) {
@@ -137,7 +128,7 @@ async function loadPack(text) {
   const raw = String(text || "").trim();
   const code = raw.includes("#p=") ? raw.slice(raw.indexOf("#p=") + 3) : raw;
   const pack = await decodeCode(code);
-  if (!pack || pack.v !== 1 || !Array.isArray(pack.sessions)) throw new Error("That isn't a Lifts plan.");
+  LiftsContract.validatePack(pack);
   if (state.pack && state.pack.generated > pack.generated) {
     throw new Error("That plan is older than the one on this phone. Open the newest link.");
   }
@@ -284,6 +275,19 @@ function planHeader(p) {
     b.goal);
 }
 
+/** A newer pack can span a Monday. Pick the prescription for a given training
+ * day, while retaining compatibility with the original one-week pack shape. */
+function cardioForDate(p, iso) {
+  const weekly = (p.cardio_weeks || []).find((c) =>
+    c.week_start && iso >= c.week_start && iso <= addDays(c.week_start, 6));
+  if (weekly) return weekly;
+  const legacy = p.cardio;
+  return legacy?.week_start && iso >= legacy.week_start && iso <= addDays(legacy.week_start, 6)
+    ? legacy : null;
+}
+
+const currentCardio = (p) => cardioForDate(p, trainingDate());
+
 function weekStrip(p) {
   const today = trainingDate();
   const monday = addDays(today, -((parseISO(today).getDay() + 6) % 7));
@@ -299,17 +303,23 @@ function weekStrip(p) {
     if (plan === "in_progress") plan = "lift";
     if (plan === "lift" && iso < today) plan = "missed";
     if (plan === "lift") toDo.push(WEEKDAYS[parseISO(iso).getDay()]);
-    const minutes = (p.cardio?.days || []).find((d) => d.date === iso)?.minutes || known?.cardio || 0;
+    const cardioPlan = cardioForDate(p, iso);
+    // Phone-logged cardio is its own completion state. It must never borrow the
+    // green "weights done" tile: a walk can satisfy cardio without completing
+    // (or replacing) a lifting session.
+    const cardioDone = state.cardio.filter((b) => b.date === iso)
+      .reduce((total, b) => total + b.minutes, 0);
+    const minutes = cardioDone || (cardioPlan?.days || []).find((d) => d.date === iso)?.minutes || known?.cardio || 0;
     if (minutes && iso >= today) cardio.push(`${WEEKDAYS[parseISO(iso).getDay()]} ${minutes} min`);
     const letter = sess?.short || known?.label || "✓";
     cells.push(h("div", {
-      class: `wd ${plan}${iso === today ? " today" : ""}`,
+      class: `wd ${plan}${cardioDone ? " cardio-done" : ""}${iso === today ? " today" : ""}`,
       "aria-label": `${dayLabel(iso)}${iso === today ? ", today" : ""}: ${plan === "lift" ? "weights" : plan}` +
-        (minutes ? `, ${minutes} min cardio` : ""),
+        (minutes ? `, ${cardioDone ? "completed " : ""}${minutes} min cardio` : ""),
     },
       h("span", { class: "wd-name", text: WEEKDAYS[parseISO(iso).getDay()] }),
-      h("div", { class: "wd-box", text: plan === "missed" ? "Miss" : ["lift", "done"].includes(plan) ? letter : "" }),
-      h("span", { class: "wd-cardio", text: minutes ? `${minutes}′` : "" })));
+      h("div", { class: "wd-box", text: plan === "missed" ? "Miss" : ["lift", "done"].includes(plan) ? letter : cardioDone ? "✓" : "" }),
+      h("span", { class: "wd-cardio", text: minutes ? `${cardioDone ? "✓" : ""}${minutes}′` : "" })));
   }
   const key = [toDo.length ? `Weights still to do: ${toDo.join(", ")}.` : "",
                cardio.length ? `Cardio (yellow): ${cardio.join(" · ")}.` : ""].join(" ").trim();
@@ -679,7 +689,7 @@ function cardioForm(p) {
     ui.machine = lastBout()?.modality || machines[0]?.key;
   }
   const m = machines.find((x) => x.key === ui.machine);
-  const planned = (p.cardio?.days || []).find((d) => d.date === trainingDate());
+  const planned = (currentCardio(p)?.days || []).find((d) => d.date === trainingDate());
 
   const machine = h("select", { name: "modality", "aria-label": "Machine",
     onchange: (ev) => { ui.machine = ev.target.value; form.replaceWith(cardioForm(p)); } });
@@ -749,7 +759,7 @@ function cardioForm(p) {
 function renderCardio(app) {
   const p = state.pack;
   if (!p) { app.append(welcome()); return; }
-  const c = p.cardio;
+  const c = currentCardio(p);
   app.append(header("Cardio", "This week", c?.reason));
 
   if (c) {
