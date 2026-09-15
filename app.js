@@ -287,7 +287,6 @@ function cardioForDate(p, iso) {
 }
 
 const currentCardio = (p) => cardioForDate(p, trainingDate());
-
 function weekStrip(p) {
   const today = trainingDate();
   const monday = addDays(today, -((parseISO(today).getDay() + 6) % 7));
